@@ -171,11 +171,14 @@ def transform_friendly_prompt_template(
 
 
 @logger.catch
-def table_self_query(artifact: ArtifactPayload, session: Session) -> CookingResult:
+def table_self_query(artifact: ArtifactPayload, session: Session) -> CookingResult | None:
     engine = TableQueryEngine(session=session, dify_model_config=artifact.dify_model_config)
     engine.load_table(file_stream=artifact.get_table_stream(), extension=artifact.table.extension)
 
     result: QueryResult = engine.query(artifact.natural_query)
+    if not result:
+        return
+
     if result.error:
         logger.error(result.error)
 

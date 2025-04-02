@@ -1,5 +1,6 @@
 import ast
 import csv
+import inspect
 import io
 import json
 import re
@@ -7,9 +8,9 @@ import traceback
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Tuple
-from typing import List, Optional, Dict, Hashable
-from typing import Union
+from typing import Callable, Any
+from typing import Dict, List, Union, Tuple
+from typing import Optional, Hashable
 
 import chardet
 import matplotlib
@@ -281,6 +282,165 @@ def get_prompt_template(site: AgentStrategyType):
     return ""
 
 
+def summarize_excel(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate a comprehensive summary of any DataFrame.
+
+    Args:
+        df: Input DataFrame to be summarized
+
+    Returns:
+        DataFrame containing summary information
+    """
+    # Initialize results dictionary
+    results: Dict[str, List[Any]] = {"Summary Type": [], "Information": [], "Details": []}
+
+    # Basic information
+    results["Summary Type"].append("基本信息")
+    results["Information"].append(f"表格大小")
+    results["Details"].append(f"{df.shape[0]}行 × {df.shape[1]}列")
+
+    # Column types summary
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    datetime_cols = df.select_dtypes(include=["datetime"]).columns.tolist()
+
+    results["Summary Type"].append("列类型分布")
+    results["Information"].append("列类型统计")
+    results["Details"].append(
+        f"数值型: {len(numeric_cols)}列, 类别型: {len(categorical_cols)}列, 日期型: {len(datetime_cols)}列"
+    )
+
+    # Missing values
+    missing_data = df.isnull().sum()
+    cols_with_missing = missing_data[missing_data > 0]
+
+    if len(cols_with_missing) > 0:
+        results["Summary Type"].append("数据完整性")
+        results["Information"].append("缺失值情况")
+        missing_summary = ", ".join(
+            [
+                f"{col}: {count}个 ({count / len(df):.1%})"
+                for col, count in cols_with_missing.items()
+            ]
+        )
+        results["Details"].append(missing_summary if missing_summary else "无缺失值")
+    else:
+        results["Summary Type"].append("数据完整性")
+        results["Information"].append("缺失值情况")
+        results["Details"].append("所有列均无缺失值")
+
+    # Numeric columns statistics
+    if numeric_cols:
+        # Overall statistics
+        results["Summary Type"].append("数值统计")
+        results["Information"].append("数值型列概览")
+        results["Details"].append(
+            f"共{len(numeric_cols)}列: {', '.join(numeric_cols[:5])}"
+            + (f"等{len(numeric_cols)}列" if len(numeric_cols) > 5 else "")
+        )
+
+        # Get statistics for each numeric column (up to 5)
+        for col in numeric_cols[:5]:
+            results["Summary Type"].append("数值统计")
+            results["Information"].append(f"'{col}'列统计")
+            stats = df[col].describe()
+            results["Details"].append(
+                f"均值: {stats['mean']:.2f}, 中位数: {stats['50%']:.2f}, "
+                + f"最小值: {stats['min']:.2f}, 最大值: {stats['max']:.2f}"
+            )
+
+    # Categorical columns statistics
+    if categorical_cols:
+        results["Summary Type"].append("类别统计")
+        results["Information"].append("类别型列概览")
+        results["Details"].append(
+            f"共{len(categorical_cols)}列: {', '.join(categorical_cols[:5])}"
+            + (f"等{len(categorical_cols)}列" if len(categorical_cols) > 5 else "")
+        )
+
+        # Get top categories for each categorical column (up to 5)
+        for col in categorical_cols[:5]:
+            value_counts = df[col].value_counts()
+            if len(value_counts) <= 5:
+                # If 5 or fewer categories, show all
+                cat_summary = ", ".join(
+                    [
+                        f"{cat}: {count}个 ({count / len(df):.1%})"
+                        for cat, count in value_counts.items()
+                    ]
+                )
+            else:
+                # Otherwise show top 3
+                top_cats = value_counts.head(3)
+                cat_summary = ", ".join(
+                    [f"{cat}: {count}个 ({count / len(df):.1%})" for cat, count in top_cats.items()]
+                )
+                cat_summary += f" 等{len(value_counts)}个不同值"
+
+            results["Summary Type"].append("类别统计")
+            results["Information"].append(f"'{col}'列分布")
+            results["Details"].append(cat_summary)
+
+    # Date columns if any
+    if datetime_cols:
+        for col in datetime_cols[:3]:
+            results["Summary Type"].append("时间统计")
+            results["Information"].append(f"'{col}'列时间范围")
+            results["Details"].append(
+                f"从 {df[col].min()} 到 {df[col].max()}, 跨度 {(df[col].max() - df[col].min()).days} 天"
+            )
+
+    # Correlation between numeric columns
+    if len(numeric_cols) >= 2:
+        corr_matrix = df[numeric_cols].corr()
+        # Get top 3 highest correlations (excluding self-correlations)
+        corrs = []
+        for i in range(len(numeric_cols)):
+            for j in range(i + 1, len(numeric_cols)):
+                corrs.append((numeric_cols[i], numeric_cols[j], corr_matrix.iloc[i, j]))
+
+        corrs.sort(key=lambda x: abs(x[2]), reverse=True)
+
+        if corrs:
+            results["Summary Type"].append("相关性分析")
+            results["Information"].append("主要相关性")
+            corr_text = ""
+            for col1, col2, corr_val in corrs[:3]:
+                corr_text += f"'{col1}' 与 '{col2}': {corr_val:.2f}, "
+            results["Details"].append(corr_text[:-2])  # Remove trailing comma and space
+
+    # Create summary DataFrame
+    summary_df = pd.DataFrame(results)
+
+    return summary_df
+
+
+def get_function_source(func: Callable[..., Any]) -> str:
+    """
+    Returns the complete source code of a function as a string.
+
+    Args:
+        func: The function object to extract source code from
+
+    Returns:
+        A string containing the complete function definition including signature and body
+
+    Raises:
+        TypeError: If the input is not a function
+        ValueError: If the source code cannot be retrieved
+    """
+    if not callable(func):
+        raise TypeError("Input must be a callable function")
+
+    try:
+        # Get the source code of the function
+        source_code = inspect.getsource(func)
+        return source_code
+    except (TypeError, OSError) as e:
+        raise ValueError(f"Could not retrieve source code for function '{func.__name__}': {str(e)}")
+
+
 class TableLoader:
     def __init__(self):
         self.df = None
@@ -531,7 +691,7 @@ class TableQueryEngine:
 
     def query(
         self, natural_query: str, enable_classifier: bool = True, retry_times: int = 5
-    ) -> QueryResult:
+    ) -> QueryResult | None:
         if self.df is None:
             return QueryOutputParser.parse(None, natural_query, error="Tabular data not loaded")
 
@@ -553,7 +713,6 @@ class TableQueryEngine:
             # Task Execution
             # ====================
             # Generate code
-            print(f">>> query:\n{natural_query}")
             query_code = self._gen_query_code(
                 natural_query=natural_query,
                 agent_strategy=(
@@ -562,7 +721,20 @@ class TableQueryEngine:
                     else AgentStrategyType.TABLE_INTERPRETER
                 ),
             )
-            print(f">>> code:\n{query_code}")
+            print(f"**Strategy:**\n{runtime_agent_strategy}\n")
+            print(f"**Query:**\n{natural_query}\n")
+            print(f"**Code:**\n{query_code}\n")
+
+            # The user problem description causes the code to fail
+            if not query_code:
+                df_result = summarize_excel(self.df)
+                return QueryOutputParser.parse(
+                    df_result,
+                    natural_query,
+                    query_type=runtime_agent_strategy.value,
+                    query_code=get_function_source(summarize_excel),
+                    recommend_filename="summary_tabular.md",
+                )
 
             # == Execute code == #
             df_result = None
@@ -630,9 +802,20 @@ class TableQueryEngine:
             "sample_data": json.dumps(self.sample_data[0], indent=2, ensure_ascii=False),
         }
         system_prompt = INSTRUCTIONS_CLASSIFIER.format(schemas=schemas).strip()
-        return self._invoke_dify_llm(
-            system_prompt=system_prompt, user_content=natural_query, temperature=0, max_tokens=200
+        response = self.session.model.llm.invoke(
+            model_config=LLMModelConfig(
+                provider=self.dify_model_config.provider,
+                model=self.dify_model_config.model,
+                mode=self.dify_model_config.mode,
+                completion_params={"max_tokens": 200, "temperature": 0},
+            ),
+            prompt_messages=[
+                SystemPromptMessage(content=system_prompt),
+                UserPromptMessage(content=natural_query),
+            ],
+            stream=False,
         )
+        return response.message.content
 
     def _gen_query_code(self, natural_query: str, agent_strategy: AgentStrategyType) -> str:
         system_prompt = get_prompt_template(agent_strategy).format(
@@ -643,13 +826,30 @@ class TableQueryEngine:
         )
         user_content = f"<query>{natural_query}<query>"
 
-        code = self._invoke_dify_llm(
-            system_prompt=system_prompt, user_content=user_content, temperature=0, max_tokens=4096
-        )
-        if "```python" in code:
-            code = code.split("```python")[1].split("```")[0].strip()
+        try:
+            response = self.session.model.llm.invoke(
+                model_config=LLMModelConfig(
+                    provider=self.dify_model_config.provider,
+                    model=self.dify_model_config.model,
+                    mode=self.dify_model_config.mode,
+                    completion_params={"max_tokens": 4096, "temperature": 0},
+                ),
+                prompt_messages=[
+                    SystemPromptMessage(content=system_prompt),
+                    UserPromptMessage(content=user_content),
+                ],
+                stream=False,
+            )
+            answer = response.message.content
+            if "```python" in answer:
+                code = answer.split("```python")[1].split("```")[0].strip()
+                return code
+            if "def execute_query" in answer:
+                return answer
+        except Exception as err:
+            logger.error(f"Error when invoke drawer: {err}")
 
-        return code
+        return ""
 
     def _invoke_post_fixer(
         self,
@@ -709,9 +909,21 @@ class TableQueryEngine:
         user_content = PROMPT_GEN_RECOMMEND_NAME.format(
             natural_query=natural_query, code=code
         ).strip()
-        return self._invoke_dify_llm(
-            system_prompt=system_prompt, user_content=user_content, temperature=0.3, max_tokens=200
+
+        response = self.session.model.llm.invoke(
+            model_config=LLMModelConfig(
+                provider=self.dify_model_config.provider,
+                model=self.dify_model_config.model,
+                mode=self.dify_model_config.mode,
+                completion_params={"max_tokens": 200, "temperature": 0.3},
+            ),
+            prompt_messages=[
+                SystemPromptMessage(content=system_prompt),
+                UserPromptMessage(content=user_content),
+            ],
+            stream=False,
         )
+        return response.message.content
 
     def _execute_query_code(self, code: str) -> Any:
         """
