@@ -1,4 +1,4 @@
-version: 0.0.2
+version: 0.0.3
 type: plugin
 author: qin2dim
 name: table_cooking
@@ -12,7 +12,7 @@ description:
   ja_JP: Cooking on tabular data, smooth Q&A
   zh_Hans: Cooking on tabular data, smooth Q&A
   pt_BR: Cooking on tabular data, smooth Q&A
-icon: icon.svg
+icon: icon.png
 resource:
   memory: 268435456
   permission:

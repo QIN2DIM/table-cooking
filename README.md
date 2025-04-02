@@ -2,7 +2,7 @@
 
 ```yaml
 Author: QIN2DIM
-Version: 0.0.2
+Version: 0.0.3
 Type: tool
 ```
 

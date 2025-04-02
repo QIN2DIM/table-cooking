@@ -21,7 +21,7 @@ import statsmodels
 import statsmodels.api as sm
 from dify_plugin.core.runtime import Session
 from dify_plugin.entities.model.llm import LLMModelConfig
-from dify_plugin.entities.model.message import SystemPromptMessage, UserPromptMessage
+from dify_plugin.entities.model.message import SystemPromptMessage, UserPromptMessage, PromptMessage
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 
@@ -530,7 +530,7 @@ class TableQueryEngine:
         self.sample_data = tl.sample_data
 
     def query(
-        self, natural_query: str, enable_classifier: bool = True, retry_times: int = 3
+        self, natural_query: str, enable_classifier: bool = True, retry_times: int = 5
     ) -> QueryResult:
         if self.df is None:
             return QueryOutputParser.parse(None, natural_query, error="Tabular data not loaded")
@@ -553,6 +553,7 @@ class TableQueryEngine:
             # Task Execution
             # ====================
             # Generate code
+            print(f">>> query:\n{natural_query}")
             query_code = self._gen_query_code(
                 natural_query=natural_query,
                 agent_strategy=(
@@ -561,8 +562,11 @@ class TableQueryEngine:
                     else AgentStrategyType.TABLE_INTERPRETER
                 ),
             )
+            print(f">>> code:\n{query_code}")
 
+            # == Execute code == #
             df_result = None
+            tracking_messages = []
             for _ in range(retry_times):
                 df_result = self._execute_query_code(query_code)
 
@@ -570,10 +574,12 @@ class TableQueryEngine:
                 if not isinstance(df_result, str):
                     break
 
-                query_code = self._code_post_fixer(
+                logger.warning("trying to restore order...")
+                query_code = self._invoke_post_fixer(
                     natural_query=natural_query,
                     error_python_code=query_code,
                     error_message=df_result,
+                    tracking_messages=tracking_messages,
                 )
 
             # ========================================
@@ -645,8 +651,12 @@ class TableQueryEngine:
 
         return code
 
-    def _code_post_fixer(
-        self, natural_query: str, error_python_code: str, error_message: str
+    def _invoke_post_fixer(
+        self,
+        natural_query: str,
+        error_python_code: str,
+        error_message: str,
+        tracking_messages: List[PromptMessage] | None = None,
     ) -> str | None:
         schemas = {
             "columns": self.schema_info["columns"],
@@ -655,24 +665,44 @@ class TableQueryEngine:
             "sample_data": json.dumps(self.sample_data[0], indent=2, ensure_ascii=False),
         }
         system_prompt = INSTRUCTIONS_POST_FIXER.strip()
-        question = PROMPT_POST_FIXER.format(
+        user_prompt = PROMPT_POST_FIXER.format(
             natural_query=natural_query,
             schemas=schemas,
             error_python_code=error_python_code,
             error_message=error_message,
         )
 
-        debugger_code = self._invoke_dify_llm(
-            system_prompt=system_prompt, user_content=question, temperature=0, max_tokens=4096
-        )
+        if not tracking_messages:
+            tracking_messages = [
+                SystemPromptMessage(content=system_prompt),
+                UserPromptMessage(content=user_prompt),
+            ]
+        else:
+            tracking_messages.append(UserPromptMessage(content=user_prompt))
 
-        if "```python" in debugger_code:
-            pattern = r"```python\s*(.*?)\s*```"
-            match = re.search(pattern, debugger_code, re.DOTALL)
-            if match:
-                debugger_code = match.group(1).strip()
-
-        return debugger_code
+        try:
+            response = self.session.model.llm.invoke(
+                model_config=LLMModelConfig(
+                    provider=self.dify_model_config.provider,
+                    model=self.dify_model_config.model,
+                    mode=self.dify_model_config.mode,
+                    completion_params={"max_tokens": 4096, "temperature": 0},
+                ),
+                prompt_messages=tracking_messages,
+                stream=False,
+            )
+            answer = response.message.content
+            tracking_messages.append(response.message)
+            if "```python" in answer:
+                pattern = r"```python\s*(.*?)\s*```"
+                match = re.search(pattern, answer, re.DOTALL)
+                if match:
+                    debugger_code = match.group(1).strip()
+                    return debugger_code
+            elif "def execute_query" in answer:
+                return answer
+        except Exception as err:
+            logger.error(f"Error when invoke fixer: {err}")
 
     def _gen_recommend_name(self, natural_query: str, code: str) -> str:
         system_prompt = get_prompt_template(AgentStrategyType.NAMING_MASTER)
@@ -717,19 +747,10 @@ class TableQueryEngine:
 
             # Call the generated function
             if "execute_query" not in namespace:
-                raise ValueError("The executed_query function was not found in the generated code")
+                return pd.DataFrame()
 
-            result = namespace["execute_query"](self.df)
-            return result
+            return namespace["execute_query"](self.df)
 
         except Exception as e:
-            error_context = {
-                "timestamp": datetime.now().isoformat(),
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "traceback": traceback.format_exc(),
-            }
-
-            logger.error(f"Code execution failed - error_context={error_context}")
-
+            logger.error(f"Code execution failed - error_context={str(e)}")
             return str(traceback.format_exc())

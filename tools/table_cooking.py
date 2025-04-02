@@ -22,6 +22,11 @@ class TableCookingTool(Tool):
 
         # Invoke tool-strategy
         cooking_result = table_self_query(artifact, self.session)
-        cooking_result_json = cooking_result.model_dump(mode="json")
-
-        yield self.create_json_message(cooking_result_json)
+        if cooking_result:
+            cooking_result_json = cooking_result.model_dump(mode="json")
+            yield self.create_text_message(cooking_result.human_ready)
+            yield self.create_json_message(cooking_result_json)
+        else:
+            yield self.create_text_message(
+                "Sorry, I can't generate a SQL statement for your query."
+            )
