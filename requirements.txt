@@ -1,6 +1,7 @@
-dify_plugin==0.0.1b74
+dify_plugin==0.0.1b76
 
 # Core Data Processing
+httpx
 loguru
 tenacity
 bs4~=0.0.2

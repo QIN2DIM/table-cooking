@@ -12,6 +12,7 @@ identity:
   icon: icon.png
 tools:
   - tools/table_cooking.yaml
+  - tools/s3_table_cooking.yaml
 extra:
   python:
     source: provider/table_cooking.py

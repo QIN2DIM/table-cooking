@@ -7,7 +7,7 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 from tools.pipeline.service import ArtifactPayload, table_self_query
 
 
-class TableCookingTool(Tool):
+class TableCookingS3Tool(Tool):
     """
     Invoke model:
     https://docs.dify.ai/zh-hans/plugins/schema-definition/reverse-invocation-of-the-dify-service/model#zui-jia-shi-jian
@@ -15,7 +15,7 @@ class TableCookingTool(Tool):
 
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage]:
         # Build artifact for QA
-        artifact = ArtifactPayload.from_dify(tool_parameters)
+        artifact = ArtifactPayload.from_s3(tool_parameters)
 
         # Invoke tool-strategy
         cooking_result = table_self_query(artifact, self.session)

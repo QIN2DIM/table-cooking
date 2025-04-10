@@ -1,18 +1,18 @@
 identity:
-  name: table_cooking
+  name: table_cooking_s3
   author: qin2dim
   label:
-    en_US: Table Data Analysis [File]
-    zh_Hans: 表格数据分析 [File]
-    pt_BR: Análise de Dados Tabulares [File]
-    ja_JP: 表データ分析 [File]
+    en_US: Table Data Analysis [S3]
+    zh_Hans: 表格数据分析 [S3]
+    pt_BR: Análise de Dados Tabulares [S3]
+    ja_JP: 表データ分析
 description:
   human:
-    en_US: "Table Data Q&A"
-    zh_Hans: "表格数据 Q&A"
-    pt_BR: "Perguntas e Respostas sobre Dados Tabulares"
+    en_US: "Table Data Q&A (Read file link)"
+    zh_Hans: "表格数据 Q&A（读入文件链接）"
+    pt_BR: "Perguntas e Respostas sobre Dados Tabulares (Ler link do arquivo)"
     ja_JP: "テーブルデータ Q&A (ファイルリンクを読み込む)"
-  llm: "This tool enables natural language queries on table files (.csv/.xlsx/.xls)."
+  llm: "This tool enables natural language queries on table files (.csv/.xlsx/.xls). Provide the valid query and file_url to pass the file to be processed."
 parameters:
   - name: query
     type: string
@@ -29,20 +29,20 @@ parameters:
       ja_JP: 表データから取得したい情報
     llm_description: "The information you want to retrieve from the table data. The query should be a formal query that is logically clear, informationally complete, and with a clear intention."
     form: llm
-  - name: table
-    type: file
+  - name: file_url
+    type: string
     required: true
     label:
-      en_US: Table file
-      zh_Hans: 表格文件
-      pt_BR: Arquivo de tabela
-      ja_JP: 表ファイル
+      en_US:  "Link to a table file."
+      zh_Hans: "表格文件链接"
+      pt_BR: "Link para um arquivo de tabela."
+      ja_JP: "テーブルファイルへのリンク"
     human_description:
-      en_US: "Provide the table file (.csv/.xlsx/.xls) for data analysis."
-      zh_Hans: "提供需要做数据分析的表格文件（.csv/.xlsx/.xls）"
-      pt_BR: "Forneça o arquivo de tabela (.csv/.xlsx/.xls) para análise de dados."
-      ja_JP: "データ分析用のテーブルファイル（.csv/.xlsx/.xls）を提供してください。"
-    llm_description: "Provide the table file (.csv/.xlsx/.xls) for data analysis."
+      en_US: "Provide a link to the table file, starting with http:// or https://"
+      zh_Hans: "提供表格文件的链接，需以 http:// 或 https:// 开头"
+      pt_BR: "Forneça um link para o arquivo de tabela, começando com http:// ou https://"
+      ja_JP: "テーブルファイルへのリンクを提供してください。http:// または https:// で始まる必要があります。"
+    llm_description: "Provide a link to the table file, starting with http:// or https://"
     form: llm
   # https://docs.dify.ai/zh-hans/plugins/schema-definition/reverse-invocation-of-the-dify-service/model#zui-jia-shi-jian
   - name: chef
@@ -56,7 +56,7 @@ parameters:
       ja_JP: モデル
     human_description:
       en_US: Model
-      zh_Hans: 使用的模型 test
+      zh_Hans: 使用的模型
       pt_BR: Modelo a ser usado
       ja_JP: 使用するモデル
     llm_description: which Model to invoke
@@ -64,4 +64,4 @@ parameters:
 
 extra:
   python:
-    source: tools/table_cooking.py
+    source: tools/s3_table_cooking.py
