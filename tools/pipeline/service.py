@@ -11,6 +11,7 @@ from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 from dify_plugin.file.file import File, DIFY_FILE_IDENTITY, FileType
 from loguru import logger
 from pydantic import BaseModel, Field
+import filetype
 
 from tools.ai.table_self_query import TableQueryEngine, QueryResult
 
@@ -179,6 +180,7 @@ class ArtifactPayload(BaseModel):
             File对象
         """
         # 解析URL以获取文件信息
+        file_url = file_url.strip()
         parsed_url = urlparse(file_url)
         path_parts = parsed_url.path.split("/")
         filename = path_parts[-1] if path_parts else "unknown_file"
@@ -190,12 +192,17 @@ class ArtifactPayload(BaseModel):
         try:
             response = httpx.get(file_url, headers=headers)
             response.raise_for_status()
+            _blob = response.content
         except Exception as e:
             raise ToolProviderCredentialValidationError(f"获取文件失败: {str(e)}")
 
         # 提取扩展名
         extension = ""
-        if "." in filename:
+        kind = filetype.guess(_blob)
+        if kind is not None:
+            extension = f".{kind.extension}"
+        elif "." in filename:
+            # 回退到文件名判断
             extension = f".{filename.split('.')[-1].lower()}"
 
         # 验证文件类型
@@ -203,7 +210,7 @@ class ArtifactPayload(BaseModel):
 
         # 获取MIME类型和文件大小
         mime_type = response.headers.get("content-type", None)
-        size = len(response.content)
+        size = len(_blob)
 
         # 验证文件大小
         ArtifactPayload._validate_file_size(size)
@@ -216,7 +223,7 @@ class ArtifactPayload(BaseModel):
             extension=extension,
             size=size,
             type=FileType.DOCUMENT,
-            _blob=response.content,
+            _blob=_blob,
         )
 
     @classmethod

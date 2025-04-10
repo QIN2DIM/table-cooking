@@ -2,7 +2,7 @@
 
 ```yaml
 Author: QIN2DIM
-Version: 0.1.0
+Version: 0.1.1
 Type: tool
 ```
 
@@ -19,5 +19,5 @@ https://github.com/user-attachments/assets/60d46a37-48b0-471b-a60c-146391ca87be
 ### Package
 
 ```bash
-./dify-plugin-windows-amd64.exe plugin package ../table-cooking/ -o difypkg/table-cooking-0.1.0.difypkg
+./dify-plugin-windows-amd64.exe plugin package ../table-cooking/ -o difypkg/table-cooking-0.1.1.difypkg
 ```

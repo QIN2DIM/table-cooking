@@ -1,0 +1,35 @@
+identity:
+  name: get_file_link
+  author: qin2dim
+  label:
+    en_US: "Get temporary file link"
+    zh_Hans: "获取文件临时链接"
+    pt_BR: "Obter link temporário do arquivo"
+    ja_JP: "ファイルの一時リンクを取得"
+description:
+  human:
+    en_US: "Get a temporary link for the Dify File"
+    zh_Hans: "获取 Dify File 的临时链接"
+    pt_BR: "Obter um link temporário para o Dify File"
+    ja_JP: "Dify File の一時リンクを取得"
+  llm: "Get a temporary link for the Dify File"
+parameters:
+  - name: tables
+    type: files
+    required: true
+    label:
+      en_US: Table file
+      zh_Hans: 表格文件
+      pt_BR: Arquivo de tabela
+      ja_JP: 表ファイル
+    human_description:
+      en_US: "Provide the table file (.csv/.xlsx/.xls) for data analysis."
+      zh_Hans: "提供需要做数据分析的表格文件（.csv/.xlsx/.xls）"
+      pt_BR: "Forneça o arquivo de tabela (.csv/.xlsx/.xls) para análise de dados."
+      ja_JP: "データ分析用のテーブルファイル（.csv/.xlsx/.xls）を提供してください。"
+    llm_description: "Provide the table file (.csv/.xlsx/.xls) for data analysis."
+    form: llm
+
+extra:
+  python:
+    source: tools/get_file_link.py

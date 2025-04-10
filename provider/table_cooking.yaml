@@ -13,6 +13,7 @@ identity:
 tools:
   - tools/table_cooking.yaml
   - tools/s3_table_cooking.yaml
+  - tools/get_file_link.yaml
 extra:
   python:
     source: provider/table_cooking.py
